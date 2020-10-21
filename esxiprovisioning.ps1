@@ -1,10 +1,16 @@
 #variables to be defined
-$vcenter="your vcenter name"
-$vmhostname="put your vmhost name"
+$vcenter="your vcenter name or ip address"
+$vmhostname="put your vmhost name or ip address"
 $DomainName = "your domain name"
 $dnservers=@()
-$dnservers += "x.x.x.x"
-$dnservers += "x.x.x.x" 
+$dnservers += "x.y.z.a"
+$dnservers += "x.y.z.b"
+$ntpservers=@()
+$ntpservers += "a.b.c.x"
+$ntpservers += "a.b.c.y"
+$vmotionIP = "i.j.k.l"
+$vmotionvlan = "VLAN ID"
+$ESXiLocalDatastore = "datastorename"
 
 Connect-VIServer -Server $vcenter -Force
 
@@ -21,12 +27,11 @@ $esxihostname.system.wbem.Get()
 #$esxihostname.system.wbem.set
 
 Get-VMHost -Name $esxihostusingip | Get-VMHostNetwork | Set-VMHostNetwork -DnsAddress $dnservers
-Get-VMHost $esxihostusingip | Add-VMHostNtpServer -NtpServer 192.168.125.9, 192.168.125.200
+Get-VMHost $esxihostusingip | Add-VMHostNtpServer -NtpServer $ntpservers
 Get-VMHostNtpServer -VMHost $esxihostusingip
 
 #start the NTP service 
-
-$NTPService=Get-VMHostService -VMHost $esxihostusingip | where{$_.Key -eq "ntpd"}
+$NTPService=Get-VMHostService -VMHost $esxihostusingip | where-object{$_.Key -eq "ntpd"}
 if(!$NTPService.Running){
 Start-VMHostService -HostService $NTPService
 }
@@ -37,10 +42,7 @@ Write-Host $NTPService.Policy
 $NTPService | Set-VMHostService -Policy "on"
 }
 
-
-
 #disable salting & Disable large paging
-
 Set-VMHostAdvancedConfiguration -VMHost $esxihostusingip -Name Mem.ShareForceSalting -Value 0 
 Set-VMHostAdvancedConfiguration -VMHost $esxihostusingip -Name Mem.AllocGuestLargePage -Value 0 
 
@@ -49,30 +51,30 @@ Get-VMhostAdvancedConfiguration -VMHost $esxihostusingip -Name Mem.ShareForceSal
 Get-VMhostAdvancedConfiguration -VMHost $esxihostusingip -Name Mem.AllocGuestLargePage
 
 #set esxi timeout
-
 Get-VMHost $esxihostusingip | Get-AdvancedSetting -Name 'UserVars.ESXiShellInteractiveTimeOut' | Set-AdvancedSetting -Value "300" -Confirm:$false
 Get-VMHost $esxihostusingip | Get-AdvancedSetting -Name UserVars.ESXiShellTimeOut | Set-AdvancedSetting -Value "600" -Confirm:$false
 
 
 #change the power policy to high
-
 (Get-View (Get-VMHost -Name $esxihostusingip| Get-View).ConfigManager.PowerSystem).ConfigurePowerPolicy(1)
 
 #see the vmnic0 and vmnic1 are added to vswitch0
+
 #Configure vMotion
 
 $vs = Get-VirtualSwitch -Name "vswitch0" -VMHost $esxihostusingip
-$vmotionpg = New-VirtualPortGroup -Name VMOTION-10 -VirtualSwitch $vs -VLanId 10
+$vmotionpg = New-VirtualPortGroup -Name VMOTION-10 -VirtualSwitch $vs -VLanId $vmotionvlan
 $pg = Get-VirtualPortGroup -Name $vmotionpg -VirtualSwitch $vs
-New-VMHostNetworkAdapter -VMHost $esxihostusingip -PortGroup $pg -VirtualSwitch $vs -IP 10.10.10.151 -SubnetMask 255.255.255.0 -VMotionEnabled:$true -Mtu 9000
+New-VMHostNetworkAdapter -VMHost $esxihostusingip -PortGroup $pg -VirtualSwitch $vs -IP $vmotionIP -SubnetMask 255.255.255.0 -VMotionEnabled:$true -Mtu 9000
 
-New-VirtualPortGroup -Name vCenter-Manage -VirtualSwitch $vs -VLanId 130
+# special port for vCenter as we do not want to keep vCenter on DVSwitch
+New-VirtualPortGroup -Name vCenter-Manage -VirtualSwitch $vs -VLanId $vcentervlan
 
 
-# configure syslogging
+# configure syslogging to local datastore only
+Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDirUnique" | Set-AdvancedSetting -Value $true
+Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | Set-AdvancedSetting -Value $ESXiLocalDatastore
 
-Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | Set-AdvancedSetting -Value "[LOCAL_RZ2-CLU01-NODE12] /syslogs"
-Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDirUnique" | Set-AdvancedSetting -Value $True
 
 
 Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | Select Entity, Name, Value
@@ -80,9 +82,7 @@ Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.gl
 #Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logHost" | Select Entity, Name, Value
 
 # configure remote dump
-
-
-$esxihostname.system.coredump.network.set($null,"vmk0",$null,"192.168.130.161",6500)
+$esxihostname.system.coredump.network.set($null,"vmk0",$null,$vcenter,6500)
 $esxihostname.system.coredump.network.set($true)
 $esxihostname.system.coredump.network.Get()
 
@@ -91,23 +91,17 @@ $esxihostname.system.coredump.network.Get()
 # add esxi to active directory
 Get-VMHost $esxihostusingip | Get-AdvancedSetting -Name Config.HostAgent.plugins.hostsvc.esxAdminsGroup
 
-
-
-#put credentials without domain e.g. itkadmin9 but NOT emp\itkadmin9
+#put credentials without domain e.g.  NOT domain\username
 $mycred=Get-Credential
 Get-VMHost $esxihostusingip | Get-VMHostAuthentication | Set-VMHostAuthentication -JoinDomain -Domain $DomainName -Credential $mycred
 
+#dell SC 5200 best practices
 
-
-
-#dell best practices
-
-#autoremoveonPDL is default value is 1
+#autoremoveonPDL is default value is 1, i need to just check if it is 1
 Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -name Disk.AutoremoveOnPDL
-
 Get-AdvancedSetting -Entity $esxihostusingip -Name VMKernel.Boot.terminateVMonPDL | Set-AdvancedSetting -Value $true
 
-# Add ESXi host in solarwinds
+# Add ESXi host in your monitoring systems
 
 
 
