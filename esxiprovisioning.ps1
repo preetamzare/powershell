@@ -1,11 +1,18 @@
 #variables to be defined
+$vcenter="your vcenter name"
+$vmhostname="put your vmhost name"
+$DomainName = "your domain name"
+$dnservers=@()
+$dnservers += "x.x.x.x"
+$dnservers += "x.x.x.x" 
 
-Connect-VIServer -Server emp-vc03 -Force
-$esxihostusingip = Get-VMHost -Name rz2-clu01-node12.emp.mailorder.dom
+Connect-VIServer -Server $vcenter -Force
+
+$esxihostusingip = Get-VMHost -Name $vmhostname
 #set vmhostname
-$DomainName = "emp.mailorder.dom"
-$name = "rz2-clu01-node12"
-$esxihostname = Get-EsxCli -VMHost rz2-clu01-node12.emp.mailorder.dom
+
+$name = $vmhostname
+$esxihostname = Get-EsxCli -VMHost $vmhostname
 
 $esxihostname.system.hostname.get()
 $esxihostname.system.hostname.set($DomainName,$null,$name)
@@ -13,17 +20,7 @@ $esxihostname.system.hostname.set($DomainName,$null,$name)
 $esxihostname.system.wbem.Get()
 #$esxihostname.system.wbem.set
 
-
-$dnservers=@()
-$dnservers += "192.168.125.9"
-$dnservers += "192.168.125.200" 
 Get-VMHost -Name $esxihostusingip | Get-VMHostNetwork | Set-VMHostNetwork -DnsAddress $dnservers
-
-
-
-
-
-
 Get-VMHost $esxihostusingip | Add-VMHostNtpServer -NtpServer 192.168.125.9, 192.168.125.200
 Get-VMHostNtpServer -VMHost $esxihostusingip
 
