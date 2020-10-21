@@ -1,10 +1,15 @@
+<# Purpose of the script is to provision a new ESXI host to vcenter.
+It is simple as i can get it. It should be run as single file but line by line (F8) option
+
+#>
+
 #variables to be defined
 $vcenter="your vcenter name or ip address"
 $vmhostname="put your vmhost name or ip address"
 $DomainName = "your domain name"
-$dnservers=@()
-$dnservers += "x.y.z.a"
-$dnservers += "x.y.z.b"
+$dnserversip=@()
+$dnserversip += "x.y.z.a"
+$dnserversip += "x.y.z.b"
 $ntpservers=@()
 $ntpservers += "a.b.c.x"
 $ntpservers += "a.b.c.y"
@@ -26,12 +31,12 @@ $esxihostname.system.hostname.set($DomainName,$null,$name)
 $esxihostname.system.wbem.Get()
 #$esxihostname.system.wbem.set
 
-Get-VMHost -Name $esxihostusingip | Get-VMHostNetwork | Set-VMHostNetwork -DnsAddress $dnservers
+Get-VMHost -Name $esxihostusingip | Get-VMHostNetwork | Set-VMHostNetwork -DnsAddress $dnserversip
 Get-VMHost $esxihostusingip | Add-VMHostNtpServer -NtpServer $ntpservers
 Get-VMHostNtpServer -VMHost $esxihostusingip
 
 #start the NTP service 
-$NTPService=Get-VMHostService -VMHost $esxihostusingip | where-object{$_.Key -eq "ntpd"}
+$NTPService=Get-VMHostService -VMHost $esxihostusingip | where-object-object{$_.Key -eq "ntpd"}
 if(!$NTPService.Running){
 Start-VMHostService -HostService $NTPService
 }
@@ -59,9 +64,9 @@ Get-VMHost $esxihostusingip | Get-AdvancedSetting -Name UserVars.ESXiShellTimeOu
 (Get-View (Get-VMHost -Name $esxihostusingip| Get-View).ConfigManager.PowerSystem).ConfigurePowerPolicy(1)
 
 #see the vmnic0 and vmnic1 are added to vswitch0
+#work is pending here
 
 #Configure vMotion
-
 $vs = Get-VirtualSwitch -Name "vswitch0" -VMHost $esxihostusingip
 $vmotionpg = New-VirtualPortGroup -Name VMOTION-10 -VirtualSwitch $vs -VLanId $vmotionvlan
 $pg = Get-VirtualPortGroup -Name $vmotionpg -VirtualSwitch $vs
@@ -77,16 +82,14 @@ Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.gl
 
 
 
-Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | Select Entity, Name, Value
-Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDirUnique" | Select Entity, Name, Value
-#Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logHost" | Select Entity, Name, Value
+Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | select-object Entity, Name, Value
+Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDirUnique" | select-object Entity, Name, Value
+#Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logHost" | select-object Entity, Name, Value
 
 # configure remote dump
 $esxihostname.system.coredump.network.set($null,"vmk0",$null,$vcenter,6500)
 $esxihostname.system.coredump.network.set($true)
 $esxihostname.system.coredump.network.Get()
-
-
 
 # add esxi to active directory
 Get-VMHost $esxihostusingip | Get-AdvancedSetting -Name Config.HostAgent.plugins.hostsvc.esxAdminsGroup
@@ -96,7 +99,6 @@ $mycred=Get-Credential
 Get-VMHost $esxihostusingip | Get-VMHostAuthentication | Set-VMHostAuthentication -JoinDomain -Domain $DomainName -Credential $mycred
 
 #dell SC 5200 best practices
-
 #autoremoveonPDL is default value is 1, i need to just check if it is 1
 Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -name Disk.AutoremoveOnPDL
 Get-AdvancedSetting -Entity $esxihostusingip -Name VMKernel.Boot.terminateVMonPDL | Set-AdvancedSetting -Value $true

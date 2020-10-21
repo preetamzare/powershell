@@ -3,7 +3,7 @@ $date=get-date
 $filenamerv=$date.Date.ToString("yyyyMMdd")
 $filepath="c:\rvtools\data\"
 
-$VMInventory=Import-Csv $filepath+RVToolsInfo_$filenamerv.csv -Delimiter ";" | where{$_.Powerstate -eq "poweredOn"}
+$VMInventory=Import-Csv $filepath+RVToolsInfo_$filenamerv.csv -Delimiter ";" | where-object{$_.Powerstate -eq "poweredOn"}
 $RAMsum=0
 $CPUsum=0
 $PStorage=0

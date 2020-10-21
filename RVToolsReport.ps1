@@ -1,5 +1,5 @@
 # review the csv output of RVTools
-$VMInventory=Import-Csv R:\CSV\RVTools_export_2020-09-10.csv  -Delimiter ";" | Where-Object{$_.Powerstate -eq "poweredOn"}
+$VMInventory=Import-Csv R:\CSV\RVTools_export_2020-09-10.csv  -Delimiter ";" | where-object-Object{$_.Powerstate -eq "poweredOn"}
 $RAMsum=0
 $CPUsum=0
 $PStorage=0
