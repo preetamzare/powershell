@@ -1,6 +1,5 @@
 <# Purpose of the script is to provision a new ESXI host to vcenter.
 It is simple as i can get it. It should be run as single file but line by line (F8) option
-
 #>
 
 #variables to be defined
@@ -81,9 +80,10 @@ Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.gl
 Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | Set-AdvancedSetting -Value $ESXiLocalDatastore
 
 
-
 Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDir" | select-object Entity, Name, Value
 Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logDirUnique" | select-object Entity, Name, Value
+
+# only for remote syslog server
 #Get-AdvancedSetting -Entity (Get-VMHost -Name $esxihostusingip) -Name "Syslog.global.logHost" | select-object Entity, Name, Value
 
 # configure remote dump
