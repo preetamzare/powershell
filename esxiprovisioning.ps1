@@ -14,6 +14,7 @@ $ntpservers += "a.b.c.x"
 $ntpservers += "a.b.c.y"
 $vmotionIP = "i.j.k.l"
 $vmotionvlan = "VLAN ID"
+$vmotiongpname ="vmotion port group name"
 $ESXiLocalDatastore = "datastorename"
 
 Connect-VIServer -Server $vcenter -Force
@@ -67,7 +68,7 @@ Get-VMHost $esxihostusingip | Get-AdvancedSetting -Name UserVars.ESXiShellTimeOu
 
 #Configure vMotion
 $vs = Get-VirtualSwitch -Name "vswitch0" -VMHost $esxihostusingip
-$vmotionpg = New-VirtualPortGroup -Name VMOTION-10 -VirtualSwitch $vs -VLanId $vmotionvlan
+$vmotionpg = New-VirtualPortGroup -Name $vmotiongpname -VirtualSwitch $vs -VLanId $vmotionvlan
 $pg = Get-VirtualPortGroup -Name $vmotionpg -VirtualSwitch $vs
 New-VMHostNetworkAdapter -VMHost $esxihostusingip -PortGroup $pg -VirtualSwitch $vs -IP $vmotionIP -SubnetMask 255.255.255.0 -VMotionEnabled:$true -Mtu 9000
 
